@@ -1,0 +1,42 @@
+[package]
+name = "sneakernet"
+version = "0.1.0"
+description = "NFC-based cryptographic key exchange using Nostr and Iroh"
+authors = ["SneakerNet"]
+edition = "2021"
+
+[lib]
+name = "sneakernet_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-nfc = "2"
+tauri-plugin-store = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+hex = "0.4"
+rand = "0.8"
+getrandom = "0.2"
+
+# Nostr for key generation and signing
+nostr = { version = "0.37", default-features = false, features = ["std"] }
+
+# Iroh for p2p key derivation - using iroh-base for just the key types
+iroh-base = { version = "0.28", features = ["key"] }
+
+# Key derivation
+hkdf = "0.12"
+sha2 = "0.10"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-nfc = { version = "2", optional = true }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

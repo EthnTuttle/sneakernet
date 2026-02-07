@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+target/
+
+# Build outputs
+dist/
+
+# Environment
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tauri
+src-tauri/gen/
+src-tauri/target/
+
+# Android
+*.apk
+*.aab
+*.keystore
+local.properties
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp

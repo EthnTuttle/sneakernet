@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schemas.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "Default capabilities for SneakerNet",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "nfc:default",
+    "nfc:allow-write",
+    "store:default",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-delete",
+    "store:allow-keys",
+    "store:allow-clear",
+    "store:allow-load",
+    "store:allow-save"
+  ]
+}
