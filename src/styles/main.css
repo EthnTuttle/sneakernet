@@ -331,6 +331,32 @@ body::before {
   text-shadow: 0 0 10px rgba(255, 51, 102, 0.5);
 }
 
+/* Role Selection */
+.role-buttons {
+  width: 100%;
+  max-width: 300px;
+}
+
+.role-hint {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  margin-bottom: 0;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.btn-text {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+}
+
+.btn-text:hover {
+  color: var(--accent);
+}
+
 /* Contact List */
 .contact-list {
   list-style: none;

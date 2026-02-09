@@ -33,7 +33,9 @@ pub fn run() {
             commands::get_public_key,
             // NFC exchange
             commands::is_nfc_available,
-            commands::start_nfc_scan,
+            commands::start_nfc_broadcast,
+            commands::start_nfc_receive,
+            commands::start_nfc_scan, // Legacy alias for start_nfc_receive
             commands::write_nfc_response,
             commands::complete_exchange,
             // QR exchange

@@ -15,8 +15,21 @@ export async function getPublicKey(): Promise<NostrKeys> {
 }
 
 // NFC Exchange commands
-export async function startNfcScan(): Promise<string> {
+
+// Start broadcasting our exchange message via NFC (sender mode)
+export async function startNfcBroadcast(): Promise<string> {
+  // Returns our pubkey after broadcasting
+  return invoke<string>('start_nfc_broadcast');
+}
+
+// Start receiving/scanning for NFC exchange message (receiver mode)
+export async function startNfcReceive(): Promise<string> {
   // Returns the received pubkey from NFC scan
+  return invoke<string>('start_nfc_receive');
+}
+
+// Legacy alias for startNfcReceive
+export async function startNfcScan(): Promise<string> {
   return invoke<string>('start_nfc_scan');
 }
 

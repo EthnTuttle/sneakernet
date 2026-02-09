@@ -156,13 +156,72 @@ pub async fn is_nfc_available(app: AppHandle) -> Result<bool, String> {
     }
 }
 
+/// Start broadcasting our exchange message via NFC (write mode)
+/// The other device should be in receive mode to read this
 #[tauri::command]
-pub async fn start_nfc_scan(app: AppHandle) -> Result<String, String> {
+pub async fn start_nfc_broadcast(
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<String, String> {
+    // Get our keys
+    let stored = {
+        let keys = state.keys.lock().unwrap();
+        keys.clone().ok_or("No keys found")?
+    };
+    
+    let our_keys = restore_keys(&stored).map_err(|e| e.to_string())?;
+    
+    // Create initial exchange message (no their_pubkey yet)
+    let msg = ExchangeMessage::new_initial(&our_keys)
+        .map_err(|e| e.to_string())?;
+    
+    let json = msg.to_json().map_err(|e| e.to_string())?;
+    let our_pubkey = msg.pubkey.clone();
+    
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        use tauri_plugin_nfc::{NfcRecord, NfcExt, NFCTypeNameFormat};
+        
+        // Write our exchange message to NFC
+        // The plugin will prompt to tap a device/tag
+        app.nfc()
+            .write(vec![NfcRecord {
+                format: NFCTypeNameFormat::Media,
+                kind: crate::exchange::NDEF_MIME_TYPE.as_bytes().to_vec(),
+                id: vec![],
+                payload: json.into_bytes(),
+            }])
+            .map_err(|e| e.to_string())?;
+        
+        Ok(our_pubkey)
+    }
+    
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let _ = app;
+        let _ = json;
+        Err("NFC not supported on this platform".to_string())
+    }
+}
+
+/// Receive and process an NFC exchange message (read mode)
+/// Returns their pubkey if successful
+#[tauri::command]
+pub async fn start_nfc_receive(
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<String, String> {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
         use tauri_plugin_nfc::NfcExt;
         
-        // Scan for NDEF tag
+        // Get our pubkey for verification
+        let our_pubkey = {
+            let keys = state.keys.lock().unwrap();
+            keys.as_ref().map(|k| k.public_key_hex.clone())
+        };
+        
+        // Scan for NDEF tag with our MIME type
         let scan_result = app
             .nfc()
             .scan(tauri_plugin_nfc::ScanRequest {
@@ -185,8 +244,9 @@ pub async fn start_nfc_scan(app: AppHandle) -> Result<String, String> {
             
             // Try to parse the exchange message
             if let Ok(msg) = ExchangeMessage::from_json(&payload_str) {
-                // Verify the message (basic verification, not checking their_pubkey yet)
-                msg.verify(None).map_err(|e| e.to_string())?;
+                // Verify the message
+                // If this is a response (has their_pubkey), verify it matches us
+                msg.verify(our_pubkey.as_deref()).map_err(|e| e.to_string())?;
                 
                 return Ok(msg.pubkey);
             }
@@ -197,11 +257,13 @@ pub async fn start_nfc_scan(app: AppHandle) -> Result<String, String> {
     
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
+        let _ = state;
         let _ = app;
         Err("NFC not supported on this platform".to_string())
     }
 }
 
+/// Write a response after receiving their pubkey
 #[tauri::command]
 pub async fn write_nfc_response(
     their_pubkey: String,
@@ -245,6 +307,15 @@ pub async fn write_nfc_response(
         let _ = json;
         Err("NFC not supported on this platform".to_string())
     }
+}
+
+// Legacy command for backward compatibility - now calls start_nfc_receive
+#[tauri::command]
+pub async fn start_nfc_scan(
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<String, String> {
+    start_nfc_receive(state, app).await
 }
 
 #[tauri::command]
