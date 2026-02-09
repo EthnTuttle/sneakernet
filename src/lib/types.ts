@@ -34,5 +34,34 @@ export type ExchangeStatus =
   | { state: 'complete'; contact: Contact }
   | { state: 'error'; message: string };
 
+// Exchange mode (NFC or QR)
+export type ExchangeMode = 'nfc' | 'qr';
+
+// QR Exchange states
+export type QRExchangeStatus =
+  | { state: 'idle' }
+  | { state: 'showing-qr' }
+  | { state: 'scanning' }
+  | { state: 'processing'; theirPubkey: string }
+  | { state: 'complete'; contact: Contact }
+  | { state: 'error'; message: string };
+
 // Tab navigation
-export type TabId = 'keys' | 'exchange' | 'contacts';
+export type TabId = 'keys' | 'exchange' | 'contacts' | 'chat';
+
+// Iroh status
+export interface IrohStatus {
+  running: boolean;
+  nodeId: string | null;
+  relayUrl: string | null;
+  connectedContacts: string[];
+}
+
+// Chat message
+export interface ChatMessage {
+  id: string;
+  content: string;
+  senderPubkey: string;
+  timestamp: number;
+  isOutgoing: boolean;
+}

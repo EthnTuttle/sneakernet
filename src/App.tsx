@@ -1,9 +1,11 @@
 import { createSignal, onMount, Show, type Component } from 'solid-js';
 import KeyDisplay from './components/KeyDisplay';
 import NFCExchange from './components/NFCExchange';
+import QRExchange from './components/QRExchange';
 import ContactList from './components/ContactList';
-import type { TabId, NostrKeys, Contact } from './lib/types';
-import { hasKeys, generateKeys, getPublicKey, getContacts } from './lib/tauri';
+import Chat from './components/Chat';
+import type { TabId, NostrKeys, Contact, ExchangeMode } from './lib/types';
+import { hasKeys, generateKeys, getPublicKey, getContacts, isNfcAvailable } from './lib/tauri';
 
 const App: Component = () => {
   const [activeTab, setActiveTab] = createSignal<TabId>('keys');
@@ -11,6 +13,9 @@ const App: Component = () => {
   const [contacts, setContacts] = createSignal<Contact[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
+  const [exchangeMode, setExchangeMode] = createSignal<ExchangeMode>('nfc');
+  const [nfcAvailable, setNfcAvailable] = createSignal<boolean>(true);
+  const [chatContact, setChatContact] = createSignal<Contact | null>(null);
 
   onMount(async () => {
     try {
@@ -28,6 +33,18 @@ const App: Component = () => {
       // Load contacts
       const savedContacts = await getContacts();
       setContacts(savedContacts);
+
+      // Check NFC availability
+      try {
+        const nfc = await isNfcAvailable();
+        setNfcAvailable(nfc);
+        if (!nfc) {
+          setExchangeMode('qr');
+        }
+      } catch {
+        setNfcAvailable(false);
+        setExchangeMode('qr');
+      }
     } catch (err) {
       console.error('Initialization error:', err);
       setError(err instanceof Error ? err.message : 'Failed to initialize');
@@ -50,6 +67,16 @@ const App: Component = () => {
     setActiveTab('contacts');
   };
 
+  const openChat = (contact: Contact) => {
+    setChatContact(contact);
+    setActiveTab('chat');
+  };
+
+  const closeChat = () => {
+    setChatContact(null);
+    setActiveTab('contacts');
+  };
+
   return (
     <div class="app">
       <Show when={!loading()} fallback={
@@ -64,60 +91,95 @@ const App: Component = () => {
             </div>
           </div>
         }>
-          <div class="content">
-            <Show when={activeTab() === 'keys'}>
-              <KeyDisplay keys={keys()} />
-            </Show>
-            
-            <Show when={activeTab() === 'exchange'}>
-              <NFCExchange 
-                keys={keys()} 
-                onComplete={onExchangeComplete} 
-              />
-            </Show>
-            
-            <Show when={activeTab() === 'contacts'}>
-              <ContactList 
-                contacts={contacts()} 
-                onRefresh={refreshContacts}
-              />
-            </Show>
-          </div>
+          <Show when={activeTab() === 'chat' && chatContact()}>
+            <Chat 
+              contact={chatContact()!} 
+              onBack={closeChat}
+            />
+          </Show>
 
-          <nav class="tab-bar">
-            <button 
-              class={`tab-item ${activeTab() === 'keys' ? 'active' : ''}`}
-              onClick={() => setActiveTab('keys')}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-              </svg>
-              Keys
-            </button>
-            
-            <button 
-              class={`tab-item ${activeTab() === 'exchange' ? 'active' : ''}`}
-              onClick={() => setActiveTab('exchange')}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
-              </svg>
-              Exchange
-            </button>
-            
-            <button 
-              class={`tab-item ${activeTab() === 'contacts' ? 'active' : ''}`}
-              onClick={() => setActiveTab('contacts')}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-              Contacts
-            </button>
-          </nav>
+          <Show when={activeTab() !== 'chat'}>
+            <div class="content">
+              <Show when={activeTab() === 'keys'}>
+                <KeyDisplay keys={keys()} />
+              </Show>
+              
+              <Show when={activeTab() === 'exchange'}>
+                <div class="exchange-mode-toggle">
+                  <button 
+                    class={`mode-btn ${exchangeMode() === 'nfc' ? 'active' : ''}`}
+                    onClick={() => setExchangeMode('nfc')}
+                    disabled={!nfcAvailable()}
+                  >
+                    NFC
+                  </button>
+                  <button 
+                    class={`mode-btn ${exchangeMode() === 'qr' ? 'active' : ''}`}
+                    onClick={() => setExchangeMode('qr')}
+                  >
+                    QR Code
+                  </button>
+                </div>
+                
+                <Show when={exchangeMode() === 'nfc'}>
+                  <NFCExchange 
+                    keys={keys()} 
+                    onComplete={onExchangeComplete} 
+                  />
+                </Show>
+                
+                <Show when={exchangeMode() === 'qr'}>
+                  <QRExchange 
+                    keys={keys()} 
+                    onComplete={onExchangeComplete} 
+                  />
+                </Show>
+              </Show>
+              
+              <Show when={activeTab() === 'contacts'}>
+                <ContactList 
+                  contacts={contacts()} 
+                  onRefresh={refreshContacts}
+                  onOpenChat={openChat}
+                />
+              </Show>
+            </div>
+
+            <nav class="tab-bar">
+              <button 
+                class={`tab-item ${activeTab() === 'keys' ? 'active' : ''}`}
+                onClick={() => setActiveTab('keys')}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                </svg>
+                Keys
+              </button>
+              
+              <button 
+                class={`tab-item ${activeTab() === 'exchange' ? 'active' : ''}`}
+                onClick={() => setActiveTab('exchange')}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
+                </svg>
+                Exchange
+              </button>
+              
+              <button 
+                class={`tab-item ${activeTab() === 'contacts' ? 'active' : ''}`}
+                onClick={() => setActiveTab('contacts')}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                Contacts
+              </button>
+            </nav>
+          </Show>
         </Show>
       </Show>
     </div>

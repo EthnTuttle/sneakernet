@@ -5,6 +5,7 @@ import { deleteContact } from '../lib/tauri';
 interface ContactListProps {
   contacts: Contact[];
   onRefresh: () => void;
+  onOpenChat: (contact: Contact) => void;
 }
 
 const ContactList: Component<ContactListProps> = (props) => {
@@ -69,6 +70,17 @@ const ContactList: Component<ContactListProps> = (props) => {
                 </div>
                 <div class="contact-iroh">
                   <strong>Iroh:</strong> {truncatePubkey(contact.irohEndpointId)}
+                </div>
+                <div class="contact-actions">
+                  <button 
+                    class="chat-button"
+                    onClick={() => props.onOpenChat(contact)}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    Chat
+                  </button>
                 </div>
                 <div class="contact-meta">
                   <span>{formatDate(contact.exchangedAt)}</span>

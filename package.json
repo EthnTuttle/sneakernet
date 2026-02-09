@@ -1,7 +1,7 @@
 {
   "name": "sneakernet",
-  "version": "0.1.0",
-  "description": "NFC-based cryptographic key exchange using Nostr and Iroh",
+  "version": "0.2.0",
+  "description": "NFC/QR-based cryptographic key exchange with Nostr and Iroh p2p chat",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,10 +18,13 @@
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-nfc": "^2.0.0",
     "@tauri-apps/plugin-store": "^2.0.0",
-    "solid-js": "^1.8.0"
+    "@tauri-apps/plugin-barcode-scanner": "^2.0.0",
+    "solid-js": "^1.8.0",
+    "qrcode": "^1.5.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
+    "@types/qrcode": "^1.5.0",
     "typescript": "^5.3.0",
     "vite": "^5.0.0",
     "vite-plugin-solid": "^2.8.0"

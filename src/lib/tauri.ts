@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Contact, NostrKeys } from './types';
+import type { Contact, NostrKeys, IrohStatus, ChatMessage } from './types';
 
 // Key management commands
 export async function hasKeys(): Promise<boolean> {
@@ -28,6 +28,15 @@ export async function completeExchange(theirPubkey: string): Promise<Contact> {
   return invoke<Contact>('complete_exchange', { theirPubkey });
 }
 
+// QR Exchange commands
+export async function getExchangeQrPayload(theirPubkey?: string): Promise<string> {
+  return invoke<string>('get_exchange_qr_payload', { theirPubkey: theirPubkey ?? null });
+}
+
+export async function processScannedQr(qrData: string): Promise<string> {
+  return invoke<string>('process_scanned_qr', { qrData });
+}
+
 // Contact management commands
 export async function getContacts(): Promise<Contact[]> {
   return invoke<Contact[]>('get_contacts');
@@ -40,4 +49,29 @@ export async function deleteContact(id: string): Promise<void> {
 // Check NFC availability
 export async function isNfcAvailable(): Promise<boolean> {
   return invoke<boolean>('is_nfc_available');
+}
+
+// Iroh chat commands
+export async function startIroh(contactPubkey: string): Promise<IrohStatus> {
+  return invoke<IrohStatus>('start_iroh', { contactPubkey });
+}
+
+export async function stopIroh(): Promise<void> {
+  return invoke<void>('stop_iroh');
+}
+
+export async function getIrohStatus(): Promise<IrohStatus> {
+  return invoke<IrohStatus>('get_iroh_status');
+}
+
+export async function connectToContact(contactPubkey: string, theirNodeId: string): Promise<void> {
+  return invoke<void>('connect_to_contact', { contactPubkey, theirNodeId });
+}
+
+export async function sendMessage(contactPubkey: string, content: string): Promise<ChatMessage> {
+  return invoke<ChatMessage>('send_message', { contactPubkey, content });
+}
+
+export async function getMessages(contactPubkey: string): Promise<ChatMessage[]> {
+  return invoke<ChatMessage[]>('get_messages', { contactPubkey });
 }

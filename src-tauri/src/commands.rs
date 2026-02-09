@@ -1,25 +1,34 @@
 //! Tauri command handlers
 
+use crate::chat::{ChatManager, ChatMessage, SharedChatManager};
 use crate::exchange::{Contact, ExchangeMessage};
 use crate::iroh_derive::derive_endpoint_id;
+use crate::iroh_node::{IrohConfig, IrohNode, IrohStatus, SharedIrohNode};
 use crate::keys::{
     generate_keypair, get_public_key_info_from_stored, restore_keys, NostrKeysInfo, StoredKeys,
 };
 use serde_json::json;
-use std::sync::Mutex;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tauri::{AppHandle, State};
 use tauri_plugin_store::StoreExt;
 
 /// Application state
 pub struct AppState {
     /// Cached keys (loaded from store on startup)
-    pub keys: Mutex<Option<StoredKeys>>,
+    pub keys: std::sync::Mutex<Option<StoredKeys>>,
+    /// Iroh node for p2p networking
+    pub iroh_node: SharedIrohNode,
+    /// Chat manager for messaging
+    pub chat_manager: SharedChatManager,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            keys: Mutex::new(None),
+            keys: std::sync::Mutex::new(None),
+            iroh_node: Arc::new(RwLock::new(IrohNode::new(IrohConfig::default()))),
+            chat_manager: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -290,4 +299,158 @@ pub fn delete_contact(id: String, app: AppHandle) -> Result<(), String> {
     let mut contacts = load_contacts_from_store(&app);
     contacts.retain(|c| c.id != id);
     save_contacts_to_store(&app, &contacts)
+}
+
+// ============================================================================
+// QR Exchange Commands
+// ============================================================================
+
+/// Get the exchange payload for QR code generation
+#[tauri::command]
+pub fn get_exchange_qr_payload(
+    their_pubkey: Option<String>,
+    state: State<AppState>,
+) -> Result<String, String> {
+    // Get our keys
+    let stored = {
+        let keys = state.keys.lock().unwrap();
+        keys.clone().ok_or("No keys found")?
+    };
+
+    let our_keys = restore_keys(&stored).map_err(|e| e.to_string())?;
+
+    // Create exchange message
+    let msg = if let Some(ref their_pk) = their_pubkey {
+        ExchangeMessage::new_response(&our_keys, their_pk)
+    } else {
+        ExchangeMessage::new_initial(&our_keys)
+    }
+    .map_err(|e| e.to_string())?;
+
+    msg.to_json().map_err(|e| e.to_string())
+}
+
+/// Process a scanned QR code and return the contact's pubkey
+#[tauri::command]
+pub fn process_scanned_qr(
+    qr_data: String,
+    state: State<AppState>,
+) -> Result<String, String> {
+    // Parse the QR data as an exchange message
+    let msg = ExchangeMessage::from_json(&qr_data).map_err(|e| e.to_string())?;
+
+    // Get our pubkey to verify if this is a response to us
+    let our_pubkey = {
+        let keys = state.keys.lock().unwrap();
+        keys.as_ref().map(|k| k.public_key_hex.clone())
+    };
+
+    // Verify the message
+    msg.verify(our_pubkey.as_deref()).map_err(|e| e.to_string())?;
+
+    // Return their pubkey
+    Ok(msg.pubkey)
+}
+
+// ============================================================================
+// Iroh Chat Commands
+// ============================================================================
+
+/// Start Iroh node for a contact
+#[tauri::command]
+pub async fn start_iroh(
+    contact_pubkey: String,
+    state: State<'_, AppState>,
+) -> Result<IrohStatus, String> {
+    // Get our keys
+    let stored = {
+        let keys = state.keys.lock().unwrap();
+        keys.clone().ok_or("No keys found")?
+    };
+
+    let secret_key_bytes = hex::decode(&stored.secret_key_hex).map_err(|e| e.to_string())?;
+
+    // Start Iroh node
+    let mut node = state.iroh_node.write().await;
+    let _node_id = node
+        .start_for_contact(&secret_key_bytes, &stored.public_key_hex, &contact_pubkey)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Initialize chat manager if not already
+    {
+        let mut chat_manager = state.chat_manager.write().await;
+        if chat_manager.is_none() {
+            *chat_manager = Some(ChatManager::new(&stored.public_key_hex, false));
+        }
+    }
+
+    Ok(node.status())
+}
+
+/// Stop Iroh node
+#[tauri::command]
+pub async fn stop_iroh(state: State<'_, AppState>) -> Result<(), String> {
+    let mut node = state.iroh_node.write().await;
+    node.stop().await.map_err(|e| e.to_string())
+}
+
+/// Get Iroh status
+#[tauri::command]
+pub async fn get_iroh_status(state: State<'_, AppState>) -> Result<IrohStatus, String> {
+    let node = state.iroh_node.read().await;
+    Ok(node.status())
+}
+
+/// Connect to a contact's Iroh endpoint
+#[tauri::command]
+pub async fn connect_to_contact(
+    contact_pubkey: String,
+    their_node_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut node = state.iroh_node.write().await;
+    node.connect_to_contact(&their_node_id, &contact_pubkey)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Send a message to a contact
+#[tauri::command]
+pub async fn send_message(
+    contact_pubkey: String,
+    content: String,
+    state: State<'_, AppState>,
+) -> Result<ChatMessage, String> {
+    // Get the connection
+    let node = state.iroh_node.read().await;
+    let connection = node
+        .get_connection(&contact_pubkey)
+        .ok_or("Not connected to contact")?
+        .clone();
+
+    // Send via chat manager
+    let mut chat_manager_guard = state.chat_manager.write().await;
+    let chat_manager = chat_manager_guard
+        .as_mut()
+        .ok_or("Chat manager not initialized")?;
+
+    chat_manager
+        .send_message(&connection, &contact_pubkey, &content)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Get messages for a contact
+#[tauri::command]
+pub async fn get_messages(
+    contact_pubkey: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ChatMessage>, String> {
+    let chat_manager_guard = state.chat_manager.read().await;
+
+    match chat_manager_guard.as_ref() {
+        Some(manager) => Ok(manager.get_messages(&contact_pubkey)),
+        None => Ok(vec![]),
+    }
 }

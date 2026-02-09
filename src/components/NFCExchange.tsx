@@ -181,17 +181,14 @@ const NFCExchange: Component<NFCExchangeProps> = (props) => {
         </button>
       </Show>
 
-      <Show when={status().state === 'complete'}>
-        {(s) => {
-          const state = s() as { state: 'complete'; contact: Contact };
-          return (
-            <div class="card" style={{ "margin-top": "24px", "text-align": "left" }}>
-              <div class="card-header">New Contact</div>
-              <div class="contact-pubkey">{state.contact.nostrPubkey}</div>
-              <div class="contact-iroh">Iroh: {state.contact.irohEndpointId}</div>
-            </div>
-          );
-        }}
+      <Show when={status().state === 'complete' ? status() as { state: 'complete'; contact: Contact } : null}>
+        {(state) => (
+          <div class="card" style={{ "margin-top": "24px", "text-align": "left" }}>
+            <div class="card-header">New Contact</div>
+            <div class="contact-pubkey">{state().contact.nostrPubkey}</div>
+            <div class="contact-iroh">Iroh: {state().contact.irohEndpointId}</div>
+          </div>
+        )}
       </Show>
     </div>
   );

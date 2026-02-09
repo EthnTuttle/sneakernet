@@ -14,6 +14,10 @@
     "store:allow-keys",
     "store:allow-clear",
     "store:allow-load",
-    "store:allow-save"
+    "store:allow-save",
+    "barcode-scanner:default",
+    "barcode-scanner:allow-scan",
+    "barcode-scanner:allow-cancel",
+    "barcode-scanner:allow-vibrate"
   ]
 }
